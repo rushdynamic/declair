@@ -22,11 +22,43 @@
       str/trim))
 
 
+(defn gum-choose-styled [options-map]
+  (let [formatted-options (mapv (fn [[title version desc]]
+                                  (let [styled-title (-> (shell {:out :string} "gum" "style"
+                                                                "--bold"
+                                                                "--foreground=10"
+                                                                title)
+                                                         :out
+                                                         str/trim)
+                                        styled-version (-> (shell {:out :string} "gum" "style"
+                                                                  "--italic"
+                                                                  "--foreground=3"
+                                                                  version)
+                                                           :out
+                                                           str/trim)
+                                        styled-desc (-> (shell {:out :string} "gum" "style"
+                                                               "--foreground=8" ; gray
+                                                               desc)
+                                                        :out
+                                                        str/trim)]
+                                    (str styled-title " " styled-version ": " styled-desc)))
+                                options-map)
+        selected (-> (apply shell {:out :string}
+                            "gum" "choose"
+                            "--header=Select a package:"
+                            formatted-options)
+                     :out
+                     str/trim)]
+    (-> selected
+        (str/split #" ")
+        first)))
+
+
 (defn massage-search-result
   [result]
   (reduce-kv
    (fn [acc _k {:keys [pname version description]}]
-     (conj acc [(str pname " " version) description]))
+     (conj acc [pname version description]))
    []
    result))
 
@@ -40,8 +72,9 @@
       massage-search-result))
 
 
-(defn -main []
-  (let [query (gum-input "Search for a package")
+(defn -main [& args]
+  (let [pkgs (first args)
+        query (if (empty? pkgs) (gum-input "Search for a package") (first pkgs))
         result (atom nil)
         message (str "Searching for \"" query "\"...")
         spinner (process ["gum" "spin" "--spinner" "dot" "--title" message "--" "sleep" "999"]
@@ -53,12 +86,17 @@
       ;; Stop spinner
       (.destroy (:proc spinner))
 
-      (println @result)
+      #_(println @result)
       #_(gum-select results)
-      (println "Done")
+
+      (if (or (nil? @result) (empty? @result))
+        (println "No results found")
+        (println (gum-choose-styled @result)))
+
+
 
       (catch Exception e
         (.destroy (:proc spinner))
         (throw e)))))
 
-(-main)
+(-main *command-line-args*)
