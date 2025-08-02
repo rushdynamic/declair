@@ -1,7 +1,8 @@
 #!/usr/bin/env bb
 
 (require '[clojure.string :as str]
-         '[babashka.process :refer [shell process]])
+         '[babashka.process :refer [shell process]]
+         '[cheshire.core :as json])
 
 ;; Check for gum
 (defn ensure-gum! []
@@ -21,11 +22,22 @@
       str/trim))
 
 
+(defn massage-search-result
+  [result]
+  (reduce-kv
+   (fn [acc _k {:keys [pname version description]}]
+     (conj acc [(str pname " " version) description]))
+   []
+   result))
+
+
 (defn nix-search
   [pkg]
   (-> {:out :string :err "/dev/null"}
       (shell (str "nix search nixpkgs " pkg " --json --extra-experimental-features \"nix-command flakes\""))
-      :out))
+      :out
+      (json/parse-string keyword)
+      massage-search-result))
 
 
 (defn -main []
@@ -33,10 +45,7 @@
         result (atom nil)
         message (str "Searching for \"" query "\"...")
         spinner (process ["gum" "spin" "--spinner" "dot" "--title" message "--" "sleep" "999"]
-                         {:out :inherit :err :inherit})
-        results [(str query)
-                 (str query "-core")
-                 (str query "-extra")]]
+                         {:out :inherit :err :inherit})]
     (try
       ;; Run API call
       (reset! result (nix-search query))
