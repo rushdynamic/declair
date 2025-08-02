@@ -1,8 +1,9 @@
 #!/usr/bin/env bb
 
-(require '[clojure.string :as str]
+(require '[babashka.fs :as fs]
          '[babashka.process :refer [shell process]]
-         '[cheshire.core :as json])
+         '[cheshire.core :as json]
+         '[clojure.string :as str])
 
 
 (def ^:private ^:const pkgs-path "/etc/nixos/modules/user-packages.nix")
@@ -102,6 +103,7 @@
                      [(str indent "  " selected-pkg)]
                      (drop closing-bracket-line-idx lines))
                     lines)]
+    (fs/copy file-path (str file-path ".declair.bak") {:replace-existing true})
     (spit file-path (str/join "\n" new-lines))))
 
 
