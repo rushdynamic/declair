@@ -86,17 +86,11 @@
       ;; Stop spinner
       (.destroy (:proc spinner))
 
-      #_(println @result)
-      #_(gum-select results)
-
       (if (or (nil? @result) (empty? @result))
         (println "No results found")
         (println (gum-choose-styled @result)))
 
-
-
-      (catch Exception e
-        (.destroy (:proc spinner))
-        (throw e)))))
+      (catch Exception _e
+        (.destroy (:proc spinner))))))
 
 (-main *command-line-args*)
