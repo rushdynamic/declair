@@ -22,25 +22,22 @@
       str/trim))
 
 
+(defn ^:private format-option
+  [label style color]
+  (-> (shell {:out :string}
+             (cond-> "gum style"
+               (some? style) (str " --" style)
+               (some? color) (str " --" color))
+             label)
+      :out
+      str/trim))
+
+
 (defn gum-choose-styled [options-map]
   (let [formatted-options (mapv (fn [[title version desc]]
-                                  (let [styled-title (-> (shell {:out :string} "gum" "style"
-                                                                "--bold"
-                                                                "--foreground=10"
-                                                                title)
-                                                         :out
-                                                         str/trim)
-                                        styled-version (-> (shell {:out :string} "gum" "style"
-                                                                  "--italic"
-                                                                  "--foreground=3"
-                                                                  version)
-                                                           :out
-                                                           str/trim)
-                                        styled-desc (-> (shell {:out :string} "gum" "style"
-                                                               "--foreground=8" ; gray
-                                                               desc)
-                                                        :out
-                                                        str/trim)]
+                                  (let [styled-title (format-option title "bold" "foreground=10")
+                                        styled-version (format-option version "italic" "foreground=3")
+                                        styled-desc (format-option desc nil "foreground=8")]
                                     (str styled-title " " styled-version ": " styled-desc)))
                                 options-map)
         selected (-> (apply shell {:out :string}
