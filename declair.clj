@@ -40,17 +40,11 @@
       str/trim))
 
 
-(defn gum-choose-styled [options-map]
-  (let [formatted-options (map (fn [[title version desc]]
-                                 (let [styled-title (format-option title "bold" "foreground=10")
-                                       styled-version (format-option version "italic" "foreground=3")
-                                       styled-desc (format-option desc nil "foreground=8")]
-                                   (str styled-title " " styled-version ": " styled-desc)))
-                               options-map)
-        selected (-> (apply shell {:out :string}
+(defn gum-choose-styled [options]
+  (let [selected (-> (apply shell {:out :string}
                             "gum" "choose"
                             "--header=Select a package:"
-                            formatted-options)
+                            options)
                      :out
                      str/trim)]
     (-> selected
@@ -111,28 +105,47 @@
   (let [pkgs (first args)
         query (if (empty? pkgs) (gum-input "Search for a package") (first pkgs))
         result (atom nil)
-        message (str "Searching for \"" query "\"...")
-        spinner (process ["gum" "spin" "--spinner" "dot" "--title" message "--" "sleep" "999"]
-                         {:out :inherit :err :inherit})]
+        spinner-fn (fn [msg] (process ["gum" "spin" "--spinner" "points" "--title" msg "--" "sleep" "999"]
+                                      {:out :inherit :err :inherit}))
+        spinner-proc (atom nil)
+        stop-spinner! (fn [] (when (some? @spinner-proc)
+                               (.destroy (:proc @spinner-proc))
+                               (shell "clear")))
+        show-spinner! (fn [msg]
+                        (stop-spinner!)
+                        (shell "clear")
+                        (reset! spinner-proc (spinner-fn msg)))]
     (try
+
+      (show-spinner! (str "Searching for \"" query "\"..."))
+
       ;; look up packages using query
       (reset! result (find-pkg query))
 
       ;; stop spinner
-      (.destroy (:proc spinner))
+      (stop-spinner!)
 
       ;; show selection prompt
       (if (or (nil? @result) (empty? @result))
         (println "No results found")
 
         ;; let user pick the relevant package
-        (let [selected-pkg (gum-choose-styled @result)]
-          (println (str "Adding `" selected-pkg "` to the config."))
-          (add-pkg pkgs-path selected-pkg)
-          (println "Rebuilding NixOS with the new package...")
-          (shell "sudo nixos-rebuild switch")))
+        (do
+          (show-spinner! "Gathering relevant packages...")
+          (let [formatted-options (mapv (fn [[title version desc]]
+                                          (let [styled-title (format-option title "bold" "foreground=10")
+                                                styled-version (format-option version "italic" "foreground=3")
+                                                styled-desc (format-option desc nil "foreground=8")]
+                                            (str styled-title " " styled-version ": " styled-desc)))
+                                        @result)
+                _ (stop-spinner!)
+                selected-pkg (gum-choose-styled formatted-options)]
+            (println (str "Adding `" selected-pkg "` to the config."))
+            (add-pkg pkgs-path selected-pkg)
+            (println "Rebuilding NixOS with the new package...")
+            (shell "sudo nixos-rebuild switch"))))
 
       (catch Exception _e
-        (.destroy (:proc spinner))))))
+        (stop-spinner!)))))
 
 (-main *command-line-args*)
