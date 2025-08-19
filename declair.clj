@@ -26,9 +26,9 @@
 
 (defn save-config
   "Accepts a config and stores it in the config path"
-  [cfg-path]
+  [cfg]
   (fs/create-dirs config-dir)
-  (spit (str config-dir "/config.edn") {:nix-path cfg-path}))
+  (spit (str config-dir "/config.edn") cfg))
 
 
 (defn ensure-gum!
@@ -61,7 +61,10 @@
   []
   (if-let [cfg (read-config-file)]
     (reset! declair-config cfg)
-    (save-config (gum-input "Enter the path to your NixOS configuration file:"))))
+    (let [cfg-path (gum-input "Enter the path to your NixOS configuration file")
+          auto-rebuild? (gum-input "Automatically rebuild NixOS after adding a package? (y/N)")]
+      (save-config {:nix-path cfg-path
+                    :auto-rebuild? (or (= auto-rebuild? "y") (= auto-rebuild? "Y"))}))))
 
 
 (create-or-load-config)
@@ -206,10 +209,13 @@
                                         @result)
                 _ (stop-spinner!)
                 selected-pkg (gum-choose-styled formatted-options)]
-            (println (str "Adding `" selected-pkg "` to the config."))
+            (println (str "Adding `" selected-pkg "` to your NixOS config."))
             (add-pkg (:nix-path @declair-config) selected-pkg)
-            (println "Rebuilding NixOS with the new package...")
-            (shell "sudo nixos-rebuild switch"))))
+            (if (:auto-rebuild? @declair-config)
+              (do
+                (println "Rebuilding NixOS with the new package...")
+                (shell "sudo nixos-rebuild switch"))
+              (println "Done")))))
 
       (catch Exception _e
         (stop-spinner!)))))
