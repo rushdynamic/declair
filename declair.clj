@@ -3,10 +3,32 @@
 (require '[babashka.fs :as fs]
          '[babashka.process :refer [shell process]]
          '[cheshire.core :as json]
+         '[clojure.edn :as edn]
+         '[clojure.java.io :as io]
          '[clojure.string :as str])
 
 
-(def ^:private ^:const pkgs-path "/etc/nixos/modules/user-packages.nix")
+(def ^:private declair-config (atom nil))
+
+
+(def ^:const config-dir (str (System/getenv "HOME") "/.config/declair"))
+
+
+(def config-path (str config-dir "/config.edn"))
+
+
+(defn read-config-file
+  "Reads the declair config file if it exists"
+  []
+  (when (.exists (io/file config-path))
+    (edn/read-string (slurp config-path))))
+
+
+(defn save-config
+  "Accepts a config and stores it in the config path"
+  [cfg-path]
+  (fs/create-dirs config-dir)
+  (spit (str config-dir "/config.edn") {:nix-path cfg-path}))
 
 
 (defn ensure-gum!
@@ -21,9 +43,6 @@
 ;; if `gum` is not present, exit
 (ensure-gum!)
 
-;;TODO: accept the path as an optional param.
-;; if file doesn't exist at pkgs-path, exit with error
-
 
 ;; gum helpers
 (defn gum-input [placeholder]
@@ -33,6 +52,19 @@
         str/trim)
     (catch Exception _
       (System/exit 130))))
+
+
+(defn create-or-load-config
+  "Checks if a declair config file exists or not,
+   and if it does, read the NixOS config path from it,
+   else asks the user for it"
+  []
+  (if-let [cfg (read-config-file)]
+    (reset! declair-config cfg)
+    (save-config (gum-input "Enter the path to your NixOS configuration file:"))))
+
+
+(create-or-load-config)
 
 
 (defn ^:private format-option
@@ -147,7 +179,7 @@
                 _ (stop-spinner!)
                 selected-pkg (gum-choose-styled formatted-options)]
             (println (str "Adding `" selected-pkg "` to the config."))
-            (add-pkg pkgs-path selected-pkg)
+            (add-pkg (:nix-path @declair-config) selected-pkg)
             (println "Rebuilding NixOS with the new package...")
             (shell "sudo nixos-rebuild switch"))))
 
