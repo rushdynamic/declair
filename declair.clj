@@ -21,12 +21,18 @@
 ;; if `gum` is not present, exit
 (ensure-gum!)
 
+;;TODO: accept the path as an optional param.
+;; if file doesn't exist at pkgs-path, exit with error
+
 
 ;; gum helpers
 (defn gum-input [placeholder]
-  (-> (shell {:out :string} "gum" "input" "--placeholder" placeholder)
-      :out
-      str/trim))
+  (try
+    (-> (shell {:out :string :err :inherit} "gum" "input" "--placeholder" placeholder)
+        :out
+        str/trim)
+    (catch Exception _
+      (System/exit 130))))
 
 
 (defn ^:private format-option
@@ -75,7 +81,7 @@
       massage-search-results))
 
 
-(defn add-pkg
+(defn add-pkg ;; TODO: improve this so that it can autodetect the pkgs list no matter where it is on the file
   "Accepts a file-path and a pkg name to be added,
    and adds it to the specified config file as the second
    last line"
