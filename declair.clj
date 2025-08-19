@@ -113,28 +113,56 @@
       massage-search-results))
 
 
-(defn add-pkg ;; TODO: improve this so that it can autodetect the pkgs list no matter where it is on the file
-  "Accepts a file-path and a pkg name to be added,
-   and adds it to the specified config file as the second
-   last line"
+(defn add-pkg
+  "Adds `selected-pkg` into the `with pkgs; [ ... ]` block
+   of the given Nix file, placing it just above the closing `]`.
+   NOTE: Also creates a `.declair.bak` backup of the config file before modifying it."
   [file-path selected-pkg]
-  (let [lines (str/split-lines (slurp file-path))
-        indent-pattern #"^(\s*)"
-        closing-bracket-line-idx (some->> lines
-                                          (map-indexed vector)
-                                          (filter #(str/includes? (second %) "]"))
-                                          first
-                                          first)
-        indent (when closing-bracket-line-idx
-                 (-> (nth lines closing-bracket-line-idx)
-                     (as-> $ (re-find indent-pattern $))
-                     second))
-        new-lines (if closing-bracket-line-idx
-                    (concat
-                     (take closing-bracket-line-idx lines)
-                     [(str indent "  " selected-pkg)]
-                     (drop closing-bracket-line-idx lines))
-                    lines)]
+  (let [lines (vec (str/split-lines (slurp file-path)))
+        ;; find the line containing "with pkgs; ["
+        start-idx (some->> lines
+                           (map-indexed vector)
+                           (filter #(str/includes? (second %) "with pkgs; ["))
+                           ffirst)
+        start-line (when start-idx (nth lines start-idx))
+        ;; find first line with ]
+        end-idx (when start-idx
+                  (some->> (subvec lines start-idx)
+                           (map-indexed (fn [i l] [(+ i start-idx) l]))
+                           (filter #(str/includes? (second %) "]"))
+                           ffirst))
+        end-line (when end-idx (nth lines end-idx))
+        indent (or (some-> end-line (as-> $ (re-find #"^(\s*)" $)) second) "  ")
+        ;; new lines depending on case
+        new-lines (cond
+                    (nil? end-idx)
+                    lines
+
+                    ;; case 1: everything on same line, ie: with pkgs; []
+                    (and (= start-idx end-idx)
+                         (re-find #"\[\s*\]" start-line))
+                    (assoc lines start-idx
+                           (str/replace start-line
+                                        #"\[\s*\]"
+                                        (str "[ " selected-pkg " ]")))
+
+                    ;; case 2: standalone closing bracket on a new line
+                    (= (str/trim end-line) "]")
+                    (vec (concat
+                          (subvec lines 0 end-idx)
+                          [(str indent selected-pkg)]
+                          (subvec lines end-idx)))
+
+                    ;; case 3: inline closing bracket, eg: "bar]"
+                    :else
+                    (let [before (subs end-line 0 (str/index-of end-line "]"))
+                          after (subs end-line (str/index-of end-line "]"))]
+                      (vec (concat
+                            (subvec lines 0 end-idx)
+                            [before
+                             (str indent selected-pkg)
+                             (str indent after)]
+                            (subvec lines (inc end-idx))))))]
     (fs/copy file-path (str file-path ".declair.bak") {:replace-existing true})
     (spit file-path (str/join "\n" new-lines))))
 
