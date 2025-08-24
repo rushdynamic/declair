@@ -1,6 +1,6 @@
 # declair
 
-A TUI app to find and add packages declaratively to your NixOS config
+A TUI app to find and add packages to your NixOS config
 
 https://github.com/user-attachments/assets/52eb411b-572f-4128-8528-a00f14a32620
 
@@ -169,6 +169,10 @@ diff your-config.nix your-config.nix.declair.bak
 ## Contributing
 
 Contributions are welcome! Please feel free to submit issues, feature requests, or pull requests.
+
+## License
+
+https://github.com/rushdynamic/declair/blob/main/LICENSE.md
 
 ## Acknowledgments
 
