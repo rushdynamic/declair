@@ -2,6 +2,8 @@
 
 A TUI app to find and add packages declaratively to your NixOS config
 
+https://github.com/user-attachments/assets/52eb411b-572f-4128-8528-a00f14a32620
+
 ## Prerequisites
 
 ### Required Dependencies
