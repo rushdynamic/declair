@@ -62,8 +62,12 @@
     (reset! declair-config cfg)
     (let [cfg-path (gum-input "Enter the path to your NixOS configuration file")
           auto-rebuild? (gum-input "Automatically rebuild NixOS after adding a package? (y/N)")]
-      (save-config {:nix-path cfg-path
-                    :auto-rebuild? (or (= auto-rebuild? "y") (= auto-rebuild? "Y"))}))))
+      (if (fs/exists? cfg-path)
+        (save-config {:nix-path cfg-path
+                      :auto-rebuild? (or (= auto-rebuild? "y") (= auto-rebuild? "Y"))})
+        (do
+          (println "❌ Invalid path to config")
+          (System/exit 1))))))
 
 
 (create-or-load-config)
