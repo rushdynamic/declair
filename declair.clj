@@ -4,7 +4,6 @@
          '[babashka.process :refer [shell process]]
          '[cheshire.core :as json]
          '[clojure.edn :as edn]
-         '[clojure.java.io :as io]
          '[clojure.string :as str])
 
 
@@ -20,7 +19,7 @@
 (defn read-config-file
   "Reads the declair config file if it exists"
   []
-  (when (.exists (io/file config-path))
+  (when (fs/exists? config-path)
     (edn/read-string (slurp config-path))))
 
 
