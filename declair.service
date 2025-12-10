@@ -1,0 +1,11 @@
+[Unit]
+Description=Warm up nix search cache for declair
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+ExecStart=/usr/bin/env bash -c 'nix search nixpkgs "" --json --extra-experimental-features "nix-command flakes" > /dev/null'
+Type=oneshot
+
+[Install]
+WantedBy=default.target
