@@ -1,6 +1,7 @@
 #!/usr/bin/env bb
 
-(require '[babashka.fs :as fs]
+(require '[babashka.cli :as cli]
+         '[babashka.fs :as fs]
          '[babashka.process :refer [shell process]]
          '[cheshire.core :as json]
          '[clojure.edn :as edn]
@@ -173,9 +174,22 @@
     (spit file-path (str/join "\n" new-lines))))
 
 
+(defn ^:private add-and-rebuild!
+  [pkg]
+  (println (str "Adding `" pkg "` to your NixOS config."))
+  (add-pkg (:nix-path @declair-config) pkg)
+  (if (:auto-rebuild? @declair-config)
+    (do
+      (println "Rebuilding NixOS with the new package...")
+      (shell "sudo nixos-rebuild switch"))
+    (println "Done")))
+
+
+
 (defn -main [& args]
-  (let [pkgs (first args)
-        query (if (empty? pkgs) (gum-input "Search for a package") (first pkgs))
+  (let [{:keys [pkg-exact]} (cli/parse-opts (first args) {:alias {:p :pkg-exact} :coerce {:pkg-exact :string}})
+        pkgs (first args)
+        query (or pkg-exact (first pkgs) (gum-input "Search for a package"))
         result (atom nil)
         spinner-fn (fn [msg] (process ["gum" "spin" "--spinner" "points" "--title" msg "--" "sleep" "999"]
                                       {:out :inherit :err :inherit}))
@@ -188,39 +202,38 @@
                         (shell "clear")
                         (reset! spinner-proc (spinner-fn msg)))]
     (try
-
-      (show-spinner! (str "Searching for \"" query "\"..."))
-
-      ;; look up packages using query
-      (reset! result (find-pkg query))
-
-      ;; stop spinner
-      (stop-spinner!)
-
-      ;; show selection prompt
-      (if (or (nil? @result) (empty? @result))
-        (println "No results found")
-
-        ;; let user pick the relevant package
+      ;; if exact pkg name has been provided using the `-p` flag, use it directly (don't search)
+      (if pkg-exact
+        (do (reset! result pkg-exact)
+            (add-and-rebuild! pkg-exact))
         (do
-          (show-spinner! "Gathering relevant packages...")
-          (let [formatted-options (mapv (fn [[title version desc]]
-                                          (let [styled-title (format-option title "bold" "foreground=10")
-                                                styled-version (format-option version "italic" "foreground=3")
-                                                styled-desc (format-option desc nil "foreground=8")]
-                                            (str styled-title " " styled-version ": " styled-desc)))
-                                        @result)
-                _ (stop-spinner!)
-                selected-pkg (gum-choose-styled formatted-options)]
-            (println (str "Adding `" selected-pkg "` to your NixOS config."))
-            (add-pkg (:nix-path @declair-config) selected-pkg)
-            (if (:auto-rebuild? @declair-config)
-              (do
-                (println "Rebuilding NixOS with the new package...")
-                (shell "sudo nixos-rebuild switch"))
-              (println "Done")))))
+          (show-spinner! (str "Searching for \"" query "\"..."))
 
+          ;; look up packages using query
+          (reset! result (find-pkg query))
+
+          ;; stop spinner
+          (stop-spinner!)
+
+          ;; show selection prompt
+          (if (or (nil? @result) (empty? @result))
+            (println "No results found")
+
+            ;; let user pick the relevant package
+            (do
+              (show-spinner! "Gathering relevant packages...")
+              (let [formatted-options (mapv (fn [[title version desc]]
+                                              (let [styled-title (format-option title "bold" "foreground=10")
+                                                    styled-version (format-option version "italic" "foreground=3")
+                                                    styled-desc (format-option desc nil "foreground=8")]
+                                                (str styled-title " " styled-version ": " styled-desc)))
+                                            @result)
+                    _ (stop-spinner!)
+                    selected-pkg (gum-choose-styled formatted-options)]
+                (add-and-rebuild! selected-pkg))))))
       (catch Exception _e
+        (stop-spinner!))
+      (finally
         (stop-spinner!)))))
 
 (-main *command-line-args*)
